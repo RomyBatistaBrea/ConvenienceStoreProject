@@ -41,9 +41,6 @@ class InventoryManager:
                 continue
             else:
                 items.append(item)  # Appends items as objects
-            # items.append(
-            # f"{item.item_type}, {item.item_id}, {item.item_name}, {item.quantity}")
-        # print(items)
         return items
 
     def update_items(self, items):
@@ -98,7 +95,6 @@ class InventoryManager:
                 except Exception as e:
                     x = False
                     print(f"Error: {e}")
-                    # cart.append(item)
             try:
                 wb.save(self.file_path)
             except:
@@ -107,7 +103,20 @@ class InventoryManager:
                 show_inventory_menu()
         return cart
 
-    # def restock(self):
+    def restock(self, updated_quantity):
+        file_path = self.file_path
+        try:
+            wb = openpyxl.load_workbook(
+                '/Users/romyb/Downloads/Inventory.xlsx')
+        except FileNotFoundError:
+            print(f"Error: Could not find file {file_path}")
+            return
+
+        sheet = wb.active
+        sheet.delete_rows(2, sheet.max_row)  # clear existing items
+        for items in updated_quantity:
+            sheet.append([items[0], items[1], items[2], items[3], items[4]])
+        wb.save(file_path)
     #     option = ""
     #     cart = []
 
@@ -134,7 +143,7 @@ class InventoryManager:
         new_item_list = []
         for item in items:
             print([item.item_id, item.item_name, item.item_type, item.quantity])
-            item.price = new_price
+            item.price = locale.currency(float(new_price), grouping=True)
             new_item_list.append(item)
 
         try:
@@ -155,47 +164,51 @@ class InventoryManager:
 
     def get_low_inventory(self):
         low_inventory_items = []
-        threshold = 30.0
+        threshold = 50.0
 
         for item in self.items:
             if item.quantity < threshold:
                 low_inventory_items.append(item)
-        # for i in low_inventory_items:
 
         if len(low_inventory_items) == 0:
             low_inventory_items = None
-            print("No items are low on inventory")
+            print("No items need to be restocked.")
         elif len(low_inventory_items) > 0:
             return low_inventory_items
 
-    def place_order(self, orders):
+    def place_order(self):
         items = self.get_inventory()
         updated_items = []
         total_price = 0
         counter = 0
-        try:
-            for order in orders:
-                item = next((x for x in items if x.item_id ==
-                            order.item_id), None)
-                if item is None:
-                    continue
-                item.quantity = 50
-                updated_items.append(item)
-                total_price += Order.calculate_total_price(InventoryManager.load_items(
-                    get_file_location()), InventoryManager.get_low_inventory(get_file_location()))
-        except:
-            return
+      #  try:
+        for item in items:
+            price = str(item.price).replace(",", "")
+            price = price.replace("$", "")
+            price = float(price)
+
+            if item.quantity <= 50:
+                counter += 1
+                total_price += price * (50 - item.quantity)
+
+            updated_items.append([
+                item.item_type, item.item_id, item.item_name, 50, locale.currency(float(price), grouping=True)])
+        if counter == 0:
+            print("\nAll items are stocked, none need to be ordered.")
+        else:
+            self.restock(updated_items)
+            print(
+                "All items have been restocked to 50 units and logged in the order log.\nTotal price: ${:.2f}".format(total_price))
 
         order_id = self.generate_order_id()
         log_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        order_log = f"Order ID: {order_id}, Total Price: {total_price}, Time: {log_time}"
+        order_log = f"Order ID: {order_id}, Total Price: ${total_price}, Time: {log_time}"
         self.log_order(order_log)
-        for item in updated_items:
 
-            counter += 1
+        show_inventory_menu()
 
     def generate_order_id(self):
-        return str(random.randint(1000, 9999))
+        return str(random.randint(100000, 999999))
 
     def log_order(self, order_log):
         try:
@@ -215,44 +228,8 @@ class Order:
         else:
             total = 0
             for item in item_list:
-                total += item.price * item.quantity
+                total += item.price * (50 - item.quantity)
             return total
-
-
-class OrderManager:
-    def __init__(self, inventory_manager):
-        self.inventory_manager = inventory_manager
-
-    def place_order(self, orders):
-        items = self.inventory_manager.get_inventory()
-        updated_items = []
-        total_price = 0
-        for order in orders:
-            item = next((x for x in items if x.item_id ==
-                         order.item.item_id), None)
-            if item is None:
-                continue
-            item.quantity = 50
-            updated_items.append(item)
-            total_price += order.calculate_total_price(InventoryManager.load_items(
-                get_file_location()), InventoryManager.get_low_inventory(get_file_location()))
-
-        order_id = self.generate_order_id()
-        # log_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # order_log = f"Order ID: {order_id}, Total Price: {total_price}, Time: {log_time}"
-        # self.log_order(order_log)
-
-        # self.inventory_manager.update_items(updated_items)
-
-    def generate_order_id(self):
-        return str(random.randint(1000, 9999))
-
-    def log_order(self, order_log):
-        try:
-            with open("order.log", "a") as f:
-                f.write(order_log + "\n")
-        except Exception as e:
-            print(f"Error writing to order log: {e}")
 
 
 def get_file_location():
@@ -273,39 +250,49 @@ def correct_price():
                 except ValueError:
                     print("\nYou must enter numbers")
             x = False
-            return new_price
+            return locale.currency(float(new_price), grouping=True)
         except ValueError:
             print("\nYou must enter numbers")
 
 
 def show_inventory_menu():
-    choice = str(input("\n1. Update item price\n2. Check Inventory\n4. Get Low Inventory\n5. Calculate Total for Low Inventory Order\n6. Place Order\n7. Generate Order ID\n8. Log Order\n9. Exit\n"))
+    choice = str(input("\n1. Update item price\n2. Check Current Inventory\n3. Get Restockable Items list\n4. Calculate Total for Low Inventory Order\n5. Order Inventory Restock\n6. Generate Order ID\n7. Log Order\n8. Exit\n"))
     if choice == "1":
         x = correct_price()
         InventoryManager.set_price(get_file_location(), InventoryManager.get_cart(
             get_file_location(), x), x)
     elif choice == "2":
-        print(InventoryManager.get_inventory(get_file_location()))
+        for item in InventoryManager.get_inventory(get_file_location()):
+            print(
+                f"{item.item_type}, {int(item.item_id)}, {item.item_name}, Quantity: {item.quantity}, Price: {item.price}")
+        # print(InventoryManager.get_inventory(get_file_location()))
         show_inventory_menu()
-    elif choice == "4":
+    elif choice == "3":
         print("\n")
         if InventoryManager.get_low_inventory(get_file_location()) is None:
             show_inventory_menu()
         else:
-            print(InventoryManager.get_low_inventory(get_file_location()))
+            for item in InventoryManager.get_low_inventory(get_file_location()):
+                print(f"{item.item_name}: {item.quantity} units left")
             show_inventory_menu()
-    elif choice == "5":
-        Order.calculate_total_price(
+    elif choice == "4":
+        print("")
+        x = Order.calculate_total_price(
             InventoryManager.load_items(get_file_location()), InventoryManager.get_low_inventory(get_file_location()))
+        if x == 0:
+            print("")
+        else:
+            print(f"\nTotal price for restock order: ${x}")
+        show_inventory_menu()
+    elif choice == "5":
+        InventoryManager.place_order(get_file_location())
     elif choice == "6":
-        InventoryManager.place_order(get_file_location(),
-                                     InventoryManager.get_inventory(get_file_location()))
+        print(InventoryManager.generate_order_id(
+            get_file_location()))  # Location of the excel file
+        show_inventory_menu()
     elif choice == "7":
-        OrderManager.generate_order_id(
-            get_file_location())  # Location of the excel file
+        InventoryManager.log_order()
     elif choice == "8":
-        OrderManager.log_order()
-    elif choice == "9":
         print("\nHave a great day! Closing Now...")
         exit()
     else:
