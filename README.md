@@ -1,4 +1,4 @@
-# convenience-store-project
+# Convenience Store Project
 
 A convenience store that is meant to a project to get accustomed with python.
 
