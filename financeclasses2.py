@@ -1,5 +1,4 @@
-import openpyxl
-from inventoryclasses import InventoryManager, get_file_location
+import inventoryclasses
 
 
 class Finance:
@@ -64,9 +63,7 @@ class Finance:
         if choice == "1":
             self.check_insurance_expense()
         elif choice == "2":
-            new_price = float(input("Enter the new price: "))
-            self.set_price(InventoryManager.get_cart(
-                get_file_location()), new_price)
+            inventoryclasses.correct_price()
         elif choice == "3":
             self.calculate_profit()
         elif choice == "4":
